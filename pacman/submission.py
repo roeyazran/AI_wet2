@@ -1,5 +1,6 @@
 import random, util, numpy, pacman
 from game import Agent,Actions
+import timeit
 
 
 PacmanLastPositions = []
@@ -47,6 +48,42 @@ class ReflexAgent(Agent):
     return betterEvaluationFunction(successorGameState)
 
 
+class OriginalReflexAgent(Agent):
+  """
+    A reflex agent chooses an action at each choice point by examining
+    its alternatives via a state evaluation function.
+  """
+  def __init__(self):
+    self.lastPositions = []
+    self.dc = None
+
+
+  def getAction(self, gameState):
+    """
+    getAction chooses among the best options according to the evaluation function.
+
+    getAction takes a GameState and returns some Directions.X for some X in the set {North, South, West, East, Stop}
+    ------------------------------------------------------------------------------
+    """
+    # Collect legal moves and successor states
+    legalMoves = gameState.getLegalActions()
+
+    # Choose one of the best actions
+    scores = [self.evaluationFunction(gameState, action) for action in legalMoves]
+    bestScore = max(scores)
+    bestIndices = [index for index in range(len(scores)) if scores[index] == bestScore]
+    chosenIndex = random.choice(bestIndices) # Pick randomly among the best
+    return legalMoves[chosenIndex]
+
+  def evaluationFunction(self, currentGameState, action):
+    """
+    The evaluation function takes in the current GameState (pacman.py) and the proposed action
+    and returns a number, where higher numbers are better.
+    """
+    successorGameState = currentGameState.generatePacmanSuccessor(action)
+    return scoreEvaluationFunction(successorGameState)
+
+
 #     ********* Evaluation functions *********
 
 def scoreEvaluationFunction(gameState):
@@ -81,7 +118,7 @@ def betterEvaluationFunction(gameState):
   if gameState.isWin():
     return gameState.getScore()
   if gameState.isLose():
-    return 0
+    return -abs(gameState.getScore())
   PacmanLocation = gameState.getPacmanState().configuration.pos
   GhostStatesArr = gameState.getGhostStates()
   #ghost has been eaten in the previous state
@@ -292,9 +329,12 @@ class MinimaxAgent(MultiAgentSearchAgent):
     global PacmanLastPositions
     global PacmanLastPositionsCounter
     global FoodCollectedCounter
+    global GhostEaten
+    global Nearestfood
+
     PacmanLastPositions.insert(0, gameState.getPacmanPosition())
     PacmanLastPositionsCounter[gameState.getPacmanPosition()]+=1
-    print ("Adding pacman rael location: ", gameState.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[gameState.getPacmanPosition()])
+    #print ("Adding pacman rael location: ", gameState.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[gameState.getPacmanPosition()])
     if len(PacmanLastPositions) > 3:
       PacmanLastPositionsCounter[PacmanLastPositions.pop()]-=1
 
@@ -306,12 +346,14 @@ class MinimaxAgent(MultiAgentSearchAgent):
       NewSucc = gameState.generateSuccessor(0, action)
       PacmanLastPositions.insert(0, NewSucc.getPacmanPosition())
       PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] += 1
-      print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+      #print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
       if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
         FoodCollectedCounter += 1;
+      GhostEaten = 1 if True in NewSucc.data._eaten else 0
+      Nearestfood=findMinFoodDistance(NewSucc)
       NewSuccVal = self.Minimax(NewSucc, self.depth- 1)
       PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] -= 1
-      print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+      #print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
       PacmanLastPositions.pop(0)
       if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
         FoodCollectedCounter -= 1;
@@ -324,6 +366,7 @@ class MinimaxAgent(MultiAgentSearchAgent):
     global PacmanLastPositions
     global FoodCollectedCounter
     global PacmanLastPositionsCounter
+    global GhostEaten
     if gameState.isLose() or gameState.isWin() or Depth ==0: return (self.evaluationFunction(gameState))
     currentAgentIndex = 0 if  gameState.data._agentMoved == None else (gameState.data._agentMoved + 1) % gameState.getNumAgents()
     if currentAgentIndex == 0:
@@ -333,12 +376,13 @@ class MinimaxAgent(MultiAgentSearchAgent):
         NewSucc = gameState.generateSuccessor(currentAgentIndex, action)
         PacmanLastPositions.insert(0, NewSucc.getPacmanPosition())
         PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] += 1
-        print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+        #print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
         if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
           FoodCollectedCounter += 1
+        GhostEaten = 1 if True in NewSucc.data._eaten else GhostEaten
         NewSuccVal = self.Minimax(NewSucc, Depth - 1)
         PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] -= 1
-        print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+        #print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
         PacmanLastPositions.pop(0)
         if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
           FoodCollectedCounter -= 1;
@@ -370,6 +414,7 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
     global PacmanLastPositionsCounter
     global FoodCollectedCounter
     global GhostEaten
+    global Nearestfood
     PacmanLastPositions.insert(0, gameState.getPacmanPosition())
     PacmanLastPositionsCounter[gameState.getPacmanPosition()]+=1
     #print ("Adding pacman rael location: ", gameState.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[gameState.getPacmanPosition()])
@@ -388,6 +433,8 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
       #      PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
       if gameState.hasFood(NewSucc.getPacmanPosition()[0],NewSucc.getPacmanPosition()[1]):
         FoodCollectedCounter +=1;
+      GhostEaten = 1 if True in NewSucc.data._eaten else 0
+      Nearestfood=findMinFoodDistance(NewSucc)
       NewSuccVal = self.AlphaBeta(NewSucc, alpha ,numpy.inf , self.depth- 1)
       PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] -= 1
       PacmanLastPositions.pop(0)
@@ -407,6 +454,7 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
     global PacmanLastPositions
     global PacmanLastPositionsCounter
     global FoodCollectedCounter
+    global GhostEaten
     if gameState.isLose() or gameState.isWin() or Depth ==0: return (self.evaluationFunction(gameState))
     currentAgentIndex = 0 if  gameState.data._agentMoved == None else (gameState.data._agentMoved + 1) % gameState.getNumAgents()
     if currentAgentIndex == 0:
@@ -422,6 +470,7 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
         if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
           FoodCollectedCounter += 1;
         NewSuccVal = self.AlphaBeta(NewSucc, alpha, beta, Depth - 1)
+        GhostEaten = 1 if True in NewSucc.data._eaten else GhostEaten
         PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] -= 1
         #print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
         PacmanLastPositions.pop(0)
@@ -458,7 +507,7 @@ class RandomExpectimaxAgent(MultiAgentSearchAgent):
       Returns the expectimax action using self.depth and self.evaluationFunction
       All ghosts should be modeled as choosing uniformly at random from their legal moves.
     """
-
+    starttime = timeit.timeit()
     # BEGIN_YOUR_CODE
     global PacmanLastPositions
     global PacmanLastPositionsCounter
@@ -498,12 +547,15 @@ class RandomExpectimaxAgent(MultiAgentSearchAgent):
         maxStatVal = stateVal
         bestAction = action
     # print(bestAction)
+    endtime = timeit.timeit()
+
     return bestAction
 
   def Expectimax(self,gameState,Depth):
     global PacmanLastPositions
     global FoodCollectedCounter
     global PacmanLastPositionsCounter
+    global GhostEaten
     if gameState.isLose() or gameState.isWin() or Depth ==0: return (self.evaluationFunction(gameState))
     currentAgentIndex = 0 if  gameState.data._agentMoved == None else (gameState.data._agentMoved + 1) % gameState.getNumAgents()
     if currentAgentIndex == 0:
@@ -523,6 +575,7 @@ class RandomExpectimaxAgent(MultiAgentSearchAgent):
         PacmanLastPositions.pop(0)
         if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
           FoodCollectedCounter -= 1;
+        GhostEaten = 1 if True in NewSucc.data._eaten else GhostEaten
 
         maxStatVal = max(maxStatVal, self.Expectimax(NewSucc, Depth - 1))
 
@@ -561,6 +614,9 @@ class DirectionalExpectimaxAgent(MultiAgentSearchAgent):
     global PacmanLastPositions
     global PacmanLastPositionsCounter
     global FoodCollectedCounter
+    global GhostEaten
+    global Nearestfood
+
     PacmanLastPositions.insert(0, gameState.getPacmanPosition())
     PacmanLastPositionsCounter[gameState.getPacmanPosition()] += 1
     # print ("Adding pacman rael location: ", gameState.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[gameState.getPacmanPosition()])
@@ -574,6 +630,9 @@ class DirectionalExpectimaxAgent(MultiAgentSearchAgent):
       # print(action)
 
       nextPacManState = gameState.generateSuccessor(0, action)
+      GhostEaten = 1 if True in nextPacManState.data._eaten else 0
+      Nearestfood = findMinFoodDistance(gameState)
+
       PacmanLastPositions.insert(0, nextPacManState.getPacmanPosition())
       PacmanLastPositionsCounter[nextPacManState.getPacmanPosition()] += 1
       # print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
@@ -599,6 +658,9 @@ class DirectionalExpectimaxAgent(MultiAgentSearchAgent):
     global PacmanLastPositions
     global FoodCollectedCounter
     global PacmanLastPositionsCounter
+    global GhostEaten
+    global Nearestfood
+
     if gameState.isLose() or gameState.isWin() or Depth ==0: return (self.evaluationFunction(gameState))
     currentAgentIndex = 0 if  gameState.data._agentMoved == None else (gameState.data._agentMoved + 1) % gameState.getNumAgents()
     if currentAgentIndex == 0:
@@ -618,6 +680,8 @@ class DirectionalExpectimaxAgent(MultiAgentSearchAgent):
         PacmanLastPositions.pop(0)
         if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
           FoodCollectedCounter -= 1;
+        GhostEaten = 1 if True in NewSucc.data._eaten else GhostEaten
+        Nearestfood = findMinFoodDistance(gameState)
 
         maxStatVal = max(maxStatVal, self.DirectionalExpectimax(NewSucc, Depth - 1))
 
@@ -677,9 +741,93 @@ class CompetitionAgent(MultiAgentSearchAgent):
 
     """
 
-    # BEGIN_YOUR_CODE
-    raise Exception("Not implemented yet")
-    # END_YOUR_CODE
+    global PacmanLastPositions
+    global PacmanLastPositionsCounter
+    global FoodCollectedCounter
+    global GhostEaten
+    global Nearestfood
+    PacmanLastPositions.insert(0, gameState.getPacmanPosition())
+    PacmanLastPositionsCounter[gameState.getPacmanPosition()] += 1
+    # print ("Adding pacman rael location: ", gameState.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[gameState.getPacmanPosition()])
+    if len(PacmanLastPositions) > 3:
+      PacmanLastPositionsCounter[PacmanLastPositions.pop()] -= 1
+
+    bestAction = None
+    maxStatVal = - numpy.inf
+    # print("~~~~~~START~~~~~~")
+    for action in gameState.getLegalActions():
+      # print(action)
+      nextPacManState = gameState.generateSuccessor(0, action)
+      GhostEaten = 1 if True in nextPacManState.data._eaten else 0
+      Nearestfood = findMinFoodDistance(gameState)
+      PacmanLastPositions.insert(0, nextPacManState.getPacmanPosition())
+      # print(action, nextPacManState.getPacmanPosition())
+      PacmanLastPositionsCounter[nextPacManState.getPacmanPosition()] += 1
+      # print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+      if gameState.hasFood(nextPacManState.getPacmanPosition()[0], nextPacManState.getPacmanPosition()[1]):
+        FoodCollectedCounter += 1;
+
+      stateVal = self.Competition(nextPacManState, 1)
+
+      PacmanLastPositionsCounter[nextPacManState.getPacmanPosition()] -= 1
+      # print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+      PacmanLastPositions.pop(0)
+      if gameState.hasFood(nextPacManState.getPacmanPosition()[0], nextPacManState.getPacmanPosition()[1]):
+        FoodCollectedCounter -= 1;
+
+      if max(stateVal, maxStatVal) == stateVal:
+        maxStatVal = stateVal
+        bestAction = action
+    # print(bestAction)
+    endtime = timeit.timeit()
+
+    return bestAction
+
+  def Competition(self, gameState, Depth):
+    global PacmanLastPositions
+    global FoodCollectedCounter
+    global PacmanLastPositionsCounter
+    global GhostEaten
+    if gameState.isLose() or gameState.isWin() or Depth == 0: return (self.evaluationFunction(gameState))
+    currentAgentIndex = 0 if gameState.data._agentMoved == None else (
+                                                                         gameState.data._agentMoved + 1) % gameState.getNumAgents()
+    if currentAgentIndex == 0:
+      # now its pacman turn
+      #   print("PACMAN TURN")
+      maxStatVal = - numpy.inf
+      for action in gameState.getLegalActions(currentAgentIndex):
+        NewSucc = gameState.generateSuccessor(currentAgentIndex, action)
+        PacmanLastPositions.insert(0, NewSucc.getPacmanPosition())
+        PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] += 1
+        # print ("Adding To pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+        if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
+          FoodCollectedCounter += 1
+
+        PacmanLastPositionsCounter[NewSucc.getPacmanPosition()] -= 1
+        # print ("Removing from pac list: ", NewSucc.getPacmanPosition(), "Counter = ", PacmanLastPositionsCounter[NewSucc.getPacmanPosition()])
+        PacmanLastPositions.pop(0)
+        if gameState.hasFood(NewSucc.getPacmanPosition()[0], NewSucc.getPacmanPosition()[1]):
+          FoodCollectedCounter -= 1;
+        GhostEaten = 1 if True in NewSucc.data._eaten else GhostEaten
+
+        maxStatVal = max(maxStatVal, self.Competition(NewSucc, Depth - 1))
+
+      # print ("pacmac max chosen: ",maxStatVal )
+      return maxStatVal
+
+    else:
+      dist = util.Counter()
+      for a in gameState.getLegalActions(currentAgentIndex): dist[a] = 1.0
+      dist.normalize()
+      # print("ghost:", currentAgentIndex, "| have:", len(dist)," moves")
+      EStatVal = 0
+      for action in gameState.getLegalActions(currentAgentIndex):
+        # print("ghost:", currentAgentIndex, "act:", action)
+        NewSucc = gameState.generateSuccessor(currentAgentIndex, action)
+        EStatVal += dist[action] * self.Competition(NewSucc, Depth)
+      # print("ghost:", currentAgentIndex, "| retrun:", EStatVal)
+      return EStatVal
+
 
 
 
